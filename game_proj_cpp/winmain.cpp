@@ -8,21 +8,10 @@
 global_var bool running;
 global_var BITMAPINFO bitmapInfo;
 global_var void *bitmapMemory;
-global_var HBITMAP bitmapHandle;
-global_var HDC bitmapDeviceContext;
 
 //device independent bitmap
 internal void Win32ResizeDIBSection(int width, int height) 
 {
-	if (bitmapHandle) 
-	{
-		DeleteObject(bitmapHandle);
-	}
-
-	if (!bitmapDeviceContext) {
-		bitmapDeviceContext = CreateCompatibleDC(0);
-	}
-
 	bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
 	bitmapInfo.bmiHeader.biWidth = width;
 	bitmapInfo.bmiHeader.biHeight = height;
@@ -30,12 +19,9 @@ internal void Win32ResizeDIBSection(int width, int height)
 	bitmapInfo.bmiHeader.biBitCount = 32;
 	bitmapInfo.bmiHeader.biCompression = BI_RGB;
 
-
-	// memory we get back from windows that we can render to
-	bitmapHandle = CreateDIBSection(bitmapDeviceContext, &bitmapInfo, DIB_RGB_COLORS, &bitmapMemory, 0, 0);
-
-	// ReleaseDC(0, deviceContext);
-
+	int bytesPerPixel = 4;
+	int bitmapMemorySize = (width * height) * bytesPerPixel;
+	bitmapMemory = VirtualAlloc(0, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
 internal void Win32UpdateWindow(HDC deviceContext, int x, int y, int width, int height) 
