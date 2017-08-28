@@ -19,7 +19,7 @@ internal void Win32ResizeDIBSection(int width, int height)
 		DeleteObject(bitmapHandle);
 	}
 
-	if (bitmapDeviceContext) {
+	if (!bitmapDeviceContext) {
 		bitmapDeviceContext = CreateCompatibleDC(0);
 	}
 
