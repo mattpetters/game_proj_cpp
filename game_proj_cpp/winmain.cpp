@@ -1,7 +1,53 @@
 #include <Windows.h>
 
+#define internal static
+#define local_persist static
+#define global_var static
 
-LRESULT CALLBACK MainWindowCallback(
+// TODO: global for now
+global_var bool running;
+global_var BITMAPINFO bitmapInfo;
+global_var void *bitmapMemory;
+global_var HBITMAP bitmapHandle;
+global_var HDC bitmapDeviceContext;
+
+//device independent bitmap
+internal void Win32ResizeDIBSection(int width, int height) 
+{
+	if (bitmapHandle) 
+	{
+		DeleteObject(bitmapHandle);
+	}
+
+	if (bitmapDeviceContext) {
+		bitmapDeviceContext = CreateCompatibleDC(0);
+	}
+
+	bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
+	bitmapInfo.bmiHeader.biWidth = width;
+	bitmapInfo.bmiHeader.biHeight = height;
+	bitmapInfo.bmiHeader.biPlanes = 1;
+	bitmapInfo.bmiHeader.biBitCount = 32;
+	bitmapInfo.bmiHeader.biCompression = BI_RGB;
+
+
+	// memory we get back from windows that we can render to
+	bitmapHandle = CreateDIBSection(bitmapDeviceContext, &bitmapInfo, DIB_RGB_COLORS, &bitmapMemory, 0, 0);
+
+	// ReleaseDC(0, deviceContext);
+
+}
+
+internal void Win32UpdateWindow(HDC deviceContext, int x, int y, int width, int height) 
+{
+	// rectangle to rectangle copy, buffer and window
+	// RGB buffer, 
+
+	StretchDIBits(deviceContext, x, y, width, height, x, y, width, height, bitmapMemory, &bitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+}
+
+
+LRESULT CALLBACK Win32MainWindowCallback(
 	HWND   window,
 	UINT   message,
 	WPARAM wParam,
@@ -12,18 +58,24 @@ LRESULT CALLBACK MainWindowCallback(
 	switch (message) {
 	case WM_SIZE:
 	{
+		RECT clientRect;
+		GetClientRect(window, &clientRect);
+		int width = clientRect.right - clientRect.left;
+		int height = clientRect.bottom - clientRect.top;
+		Win32ResizeDIBSection(width, height);
 		OutputDebugStringA("WM_SIZE\n");
 	} break;
 
 	case WM_DESTROY:
 	{
-		OutputDebugStringA("WM_DESTROY\n");
+		// TODO: handle this as an error - recreate window
+		running = false;
 	} break;
 
 	case WM_CLOSE:
 	{
-		OutputDebugStringA("WM_CLOSE\n");
-	
+		// TODO: handle this as a message to the user
+		running = false;
 	} break;
 
 	case WM_ACTIVATEAPP:
@@ -40,15 +92,7 @@ LRESULT CALLBACK MainWindowCallback(
 		int y = paint.rcPaint.top;
 		int height = paint.rcPaint.bottom - paint.rcPaint.top;
 		int width = paint.rcPaint.right - paint.rcPaint.left;
-		// Very bad idea, global scope, however local scope lexically
-		static DWORD operation = WHITENESS;
-		PatBlt(deviceContext, x, y, width, height, operation);
-		if (operation == WHITENESS) {
-			operation = BLACKNESS;
-		}
-		else {
-			operation = WHITENESS;
-		}
+		Win32UpdateWindow(deviceContext, x, y, width, height);
 		EndPaint(window, &paint);
 
 	} break;
@@ -71,7 +115,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 {
 	WNDCLASS windowClass = {};
 	windowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
-	windowClass.lpfnWndProc = MainWindowCallback;
+	windowClass.lpfnWndProc = Win32MainWindowCallback;
 	// Get module handle gets the current instance wherever you are
 	windowClass.hInstance = instance;
 	// windowClass.hIcon
@@ -92,8 +136,9 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 			0);
 		if (windowHandle) 
 		{
+			running = true;
 			// Windows sends messages to your window through a message queue
-			for (;;) {
+			while (running) {
 				MSG message;
 				BOOL MessageResult = GetMessage(&message, 0, 0, 0);
 				if (MessageResult > 0) {
