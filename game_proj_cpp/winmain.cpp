@@ -12,6 +12,12 @@ global_var void *bitmapMemory;
 //device independent bitmap
 internal void Win32ResizeDIBSection(int width, int height) 
 {
+    if (bitmapMemory) 
+    {
+        // committing changes, switching to windows, 17:01
+        VirtualFree(bitmapMemory, 0, MEM_RELEASE);
+    }
+
 	bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
 	bitmapInfo.bmiHeader.biWidth = width;
 	bitmapInfo.bmiHeader.biHeight = height;
