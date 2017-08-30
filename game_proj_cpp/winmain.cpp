@@ -16,9 +16,26 @@ typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
 
-
 // TODO: global for now
 global_var bool running;
+
+struct win32_window_dimension {
+	int width;
+	int height;
+};
+
+win32_window_dimension
+Win32GetWindowDimension(HWND window) 
+{
+	win32_window_dimension result;
+
+	RECT rect;
+	GetClientRect(window, &rect);
+	result.width = rect.right - rect.left;
+	result.height = rect.bottom - rect.top;
+
+	return(result);
+}
 
 struct win32_offscreen_buffer
 {
@@ -27,7 +44,7 @@ struct win32_offscreen_buffer
 	 int Width;
 	 int Height;
 	 int Pitch;
-	 int bytesPerPixel = 4;
+	 int bytesPerPixel;
 };
 
 global_var win32_offscreen_buffer globalBackbuffer;
@@ -88,7 +105,12 @@ internal void Win32ResizeDIBSection(win32_offscreen_buffer *buffer, int width, i
 
 	buffer->Width = width;
 	buffer->Height = height;
+	buffer->bytesPerPixel = 4;
 
+	/* 
+		Error that happens everytime you run the program
+		Error that you may not find before you ship
+	*/
 
 	buffer->Info.bmiHeader.biSize = sizeof(buffer->Info.bmiHeader);
 	buffer->Info.bmiHeader.biWidth = buffer->Width;
@@ -104,13 +126,12 @@ internal void Win32ResizeDIBSection(win32_offscreen_buffer *buffer, int width, i
 
 }
 
-internal void Win32DisplayBufferInWindow(HDC deviceContext, RECT windowRect, win32_offscreen_buffer buffer, int x, int y, int width, int height) 
+internal void Win32DisplayBufferInWindow(HDC deviceContext, int windowWidth, int windowHeight, win32_offscreen_buffer buffer, int x, int y, int width, int height) 
 {
-	int windowWidth = windowRect.right - windowRect.left;
-	int windowHeight = windowRect.bottom - windowRect.top;
-
+	// Aspect Ratio - floating point or in integer
+	// TODO: Aspect ratio correction
 	StretchDIBits(deviceContext, 
-		0, 0, buffer.Width, buffer.Height, 0, 0, windowWidth, windowHeight, buffer.Memory, &buffer.Info, DIB_RGB_COLORS, SRCCOPY);
+		0, 0, windowWidth, windowHeight, 0, 0,buffer.Width, buffer.Height, buffer.Memory, &buffer.Info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 
@@ -125,12 +146,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 	switch (message) {
 	case WM_SIZE:
 	{
-		RECT clientRect;
-		GetClientRect(window, &clientRect);
-		int width = clientRect.right - clientRect.left;
-		int height = clientRect.bottom - clientRect.top;
-		Win32ResizeDIBSection(&globalBackbuffer, width, height);
-		OutputDebugStringA("WM_SIZE\n");
+
 	} break;
 
 	case WM_DESTROY:
@@ -159,9 +175,9 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		int y = paint.rcPaint.top;
 		int height = paint.rcPaint.bottom - paint.rcPaint.top;
 		int width = paint.rcPaint.right - paint.rcPaint.left;
-		RECT clientRect;
-		GetClientRect(window, &clientRect);
-		Win32DisplayBufferInWindow(deviceContext,  clientRect, globalBackbuffer, x, y, width, height);
+		win32_window_dimension dimension = Win32GetWindowDimension(window);
+		Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, globalBackbuffer, x, y, width, height);
+
 		EndPaint(window, &paint);
 
 	} break;
@@ -183,6 +199,8 @@ LRESULT CALLBACK Win32MainWindowCallback(
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLine, int showCode)
 {
 	WNDCLASS windowClass = {};
+	Win32ResizeDIBSection(&globalBackbuffer, 1280, 720);
+
 	windowClass.style = CS_HREDRAW|CS_VREDRAW;
 	windowClass.lpfnWndProc = Win32MainWindowCallback;
 	// Get module handle gets the current instance wherever you are
@@ -220,15 +238,12 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 					TranslateMessage(&message);
 					DispatchMessage(&message);
 				}
-				RenderWeirdGradient(globalBackbuffer ,xOffset, yOffset);
+				RenderWeirdGradient(globalBackbuffer, xOffset, yOffset);
 
 				HDC deviceContext = GetDC(windowHandle);
-				RECT windowRect;
-				GetClientRect(windowHandle, &windowRect);
-				int windowWidth = windowRect.right - windowRect.left;
-				int windowHeight = windowRect.bottom - windowRect.top;
+				win32_window_dimension dimension = Win32GetWindowDimension(windowHandle);
 
-				Win32DisplayBufferInWindow(deviceContext, windowRect, globalBackbuffer, 0, 0, windowWidth, windowHeight);
+				Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, globalBackbuffer, 0, 0, dimension.width, dimension.height);
 				ReleaseDC(windowHandle, deviceContext);
 				
 				++xOffset;
