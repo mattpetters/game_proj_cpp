@@ -204,6 +204,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				int xOffset = 0;
 				int yOffset = 0;
 			while (running) {
+                // trying to be lexically scoped as close as possible
 				MSG message;
 				while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
 					if (message.message == WM_QUIT) {
@@ -223,6 +224,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				Win32UpdateWindow(deviceContext, windowRect, 0, 0, windowWidth, windowHeight);
 				ReleaseDC(windowHandle, deviceContext);
 				++xOffset;
+                yOffset += 2;
 			}
 		}
 		else {
