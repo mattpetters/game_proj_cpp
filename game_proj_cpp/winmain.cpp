@@ -19,22 +19,27 @@ typedef int64_t int64;
 
 // TODO: global for now
 global_var bool running;
-global_var BITMAPINFO bitmapInfo;
-global_var void *bitmapMemory;
-global_var int bitmapWidth;
-global_var int bitmapHeight;
-global_var int bytesPerPixel = 4;
 
-internal void
-RenderWeirdGradient(int xOffset, int yOffset)
+struct win32_offscreen_buffer
 {
-	int width = bitmapWidth;
-	int height = bitmapHeight;
+	 BITMAPINFO Info;
+	 void *Memory;
+	 int Width;
+	 int Height;
+	 int Pitch;
+	 int bytesPerPixel = 4;
+};
+
+global_var win32_offscreen_buffer globalBackbuffer;
+
+internal void RenderWeirdGradient(win32_offscreen_buffer buffer, int xOffset, int yOffset)
+{
+	int width = buffer.Width;
+	int height = buffer.Height;
 	// Pitch is the amount we want to move the pointer, difference between a row and the next row
 	// pointer aliasing, when compiler doesn't know if a pointer has been rewritten
-	int pitch = width*bytesPerPixel;
-	uint8 *row = (uint8 *)bitmapMemory;
-	for (int y = 0; y < bitmapHeight; ++y) 
+	uint8 *row = (uint8 *)buffer.Memory;
+	for (int y = 0; y < height; ++y) 
 	{
 		/*
 			Pointer arithmetic - anytime you add or subtract something from a pointer to move it around in memory, C will silently multiply that movement by the size of the thing being pointed to
@@ -42,7 +47,7 @@ RenderWeirdGradient(int xOffset, int yOffset)
 			Little endian architecture - first byte in the lowest part
 		*/
 		uint32 *pixel = (uint32 *)row;
-		for (int x = 0; x < bitmapWidth; ++x)
+		for (int x = 0; x < width; ++x)
 		{
 			// Dereference operator, access the memory pointed to by this pixel
 			/*
@@ -68,42 +73,44 @@ RenderWeirdGradient(int xOffset, int yOffset)
 			*pixel++ = ((green << 8) | blue);
 		}
 
-		row += pitch;
+		row += buffer.Pitch;
 	}
 }
 
 //device independent bitmap
-internal void Win32ResizeDIBSection(int width, int height) 
+internal void Win32ResizeDIBSection(win32_offscreen_buffer *buffer, int width, int height) 
 {
-    if (bitmapMemory) 
+    if (buffer->Memory) 
     {
         // committing changes, switching to windows, 17:01
-        VirtualFree(bitmapMemory, 0, MEM_RELEASE);
+        VirtualFree(buffer->Memory, 0, MEM_RELEASE);
     }
 
-	bitmapWidth = width;
-	bitmapHeight = height;
+	buffer->Width = width;
+	buffer->Height = height;
 
 
-	bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
-	bitmapInfo.bmiHeader.biWidth = bitmapWidth;
-	bitmapInfo.bmiHeader.biHeight = -bitmapHeight;
-	bitmapInfo.bmiHeader.biPlanes = 1;
-	bitmapInfo.bmiHeader.biBitCount = 32;
-	bitmapInfo.bmiHeader.biCompression = BI_RGB;
+	buffer->Info.bmiHeader.biSize = sizeof(buffer->Info.bmiHeader);
+	buffer->Info.bmiHeader.biWidth = buffer->Width;
+	buffer->Info.bmiHeader.biHeight = -buffer->Height;
+	buffer->Info.bmiHeader.biPlanes = 1;
+	buffer->Info.bmiHeader.biBitCount = 32;
+	buffer->Info.bmiHeader.biCompression = BI_RGB;
 
-	int bitmapMemorySize = (bitmapWidth * bitmapHeight) * bytesPerPixel;
-	bitmapMemory = VirtualAlloc(0, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+	buffer->Pitch = width*buffer->bytesPerPixel;
+	int bitmapMemorySize = (buffer->Width * buffer->Height) * buffer->bytesPerPixel;
+	buffer->Memory = VirtualAlloc(0, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+
 
 }
 
-internal void Win32UpdateWindow(HDC deviceContext, RECT windowRect, int x, int y, int width, int height) 
+internal void Win32DisplayBufferInWindow(HDC deviceContext, RECT windowRect, win32_offscreen_buffer buffer, int x, int y, int width, int height) 
 {
 	int windowWidth = windowRect.right - windowRect.left;
 	int windowHeight = windowRect.bottom - windowRect.top;
 
 	StretchDIBits(deviceContext, 
-		0, 0, bitmapWidth, bitmapHeight, 0, 0, windowWidth, windowHeight, bitmapMemory, &bitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+		0, 0, buffer.Width, buffer.Height, 0, 0, windowWidth, windowHeight, buffer.Memory, &buffer.Info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 
@@ -122,7 +129,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		GetClientRect(window, &clientRect);
 		int width = clientRect.right - clientRect.left;
 		int height = clientRect.bottom - clientRect.top;
-		Win32ResizeDIBSection(width, height);
+		Win32ResizeDIBSection(&globalBackbuffer, width, height);
 		OutputDebugStringA("WM_SIZE\n");
 	} break;
 
@@ -154,7 +161,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		int width = paint.rcPaint.right - paint.rcPaint.left;
 		RECT clientRect;
 		GetClientRect(window, &clientRect);
-		Win32UpdateWindow(deviceContext, clientRect, x, y, width, height);
+		Win32DisplayBufferInWindow(deviceContext,  clientRect, globalBackbuffer, x, y, width, height);
 		EndPaint(window, &paint);
 
 	} break;
@@ -213,7 +220,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 					TranslateMessage(&message);
 					DispatchMessage(&message);
 				}
-				RenderWeirdGradient(xOffset, yOffset);
+				RenderWeirdGradient(globalBackbuffer ,xOffset, yOffset);
 
 				HDC deviceContext = GetDC(windowHandle);
 				RECT windowRect;
@@ -221,8 +228,9 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				int windowWidth = windowRect.right - windowRect.left;
 				int windowHeight = windowRect.bottom - windowRect.top;
 
-				Win32UpdateWindow(deviceContext, windowRect, 0, 0, windowWidth, windowHeight);
+				Win32DisplayBufferInWindow(deviceContext, windowRect, globalBackbuffer, 0, 0, windowWidth, windowHeight);
 				ReleaseDC(windowHandle, deviceContext);
+				
 				++xOffset;
                 yOffset += 2;
 			}
