@@ -31,6 +31,7 @@ RenderWeirdGradient(int xOffset, int yOffset)
 	int width = bitmapWidth;
 	int height = bitmapHeight;
 	// Pitch is the amount we want to move the pointer, difference between a row and the next row
+	// pointer aliasing, when compiler doesn't know if a pointer has been rewritten
 	int pitch = width*bytesPerPixel;
 	uint8 *row = (uint8 *)bitmapMemory;
 	for (int y = 0; y < bitmapHeight; ++y) 
@@ -96,11 +97,10 @@ internal void Win32ResizeDIBSection(int width, int height)
 
 }
 
-internal void Win32UpdateWindow(HDC deviceContext, RECT *windowRect, int x, int y, int width, int height) 
+internal void Win32UpdateWindow(HDC deviceContext, RECT windowRect, int x, int y, int width, int height) 
 {
-
-	int windowWidth = windowRect->right - windowRect->left;
-	int windowHeight = windowRect->bottom - windowRect->top;
+	int windowWidth = windowRect.right - windowRect.left;
+	int windowHeight = windowRect.bottom - windowRect.top;
 
 	StretchDIBits(deviceContext, 
 		0, 0, bitmapWidth, bitmapHeight, 0, 0, windowWidth, windowHeight, bitmapMemory, &bitmapInfo, DIB_RGB_COLORS, SRCCOPY);
@@ -154,7 +154,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		int width = paint.rcPaint.right - paint.rcPaint.left;
 		RECT clientRect;
 		GetClientRect(window, &clientRect);
-		Win32UpdateWindow(deviceContext, &clientRect, x, y, width, height);
+		Win32UpdateWindow(deviceContext, clientRect, x, y, width, height);
 		EndPaint(window, &paint);
 
 	} break;
@@ -176,7 +176,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLine, int showCode)
 {
 	WNDCLASS windowClass = {};
-	windowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
+	windowClass.style = CS_HREDRAW|CS_VREDRAW;
 	windowClass.lpfnWndProc = Win32MainWindowCallback;
 	// Get module handle gets the current instance wherever you are
 	windowClass.hInstance = instance;
@@ -220,9 +220,8 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				int windowWidth = windowRect.right - windowRect.left;
 				int windowHeight = windowRect.bottom - windowRect.top;
 
-				Win32UpdateWindow(deviceContext, &windowRect, 0, 0, windowWidth, windowHeight);
+				Win32UpdateWindow(deviceContext, windowRect, 0, 0, windowWidth, windowHeight);
 				ReleaseDC(windowHandle, deviceContext);
-
 				++xOffset;
 			}
 		}
