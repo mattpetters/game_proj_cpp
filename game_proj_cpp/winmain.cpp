@@ -40,7 +40,7 @@ RenderWeirdGradient(int xOffset, int yOffset)
 			16 bit - move by 2, every time. Don't want to do that for explicit arithmetic
 			Little endian architecture - first byte in the lowest part
 		*/
-		uint8 *pixel = (uint8 *)row;
+		uint32 *pixel = (uint32 *)row;
 		for (int x = 0; x < bitmapWidth; ++x)
 		{
 			// Dereference operator, access the memory pointed to by this pixel
@@ -48,17 +48,23 @@ RenderWeirdGradient(int xOffset, int yOffset)
 								pixel+0 pixel+1 pixel+2 pixel+3
 				Pixel in memory: bb      gg      rr       xx
 			*/
-			*pixel = (uint8)(x + xOffset);
-			++pixel;
-			
-			*pixel = (uint8)(y + yOffset);
-			++pixel;
+			uint8 blue = (x + xOffset);
+			uint8 green = (y + yOffset);
 
-			*pixel = 0;
-			++pixel;
+			// 32 bit write
+			/*
+				Memory: BB GG RR xx
 
-			*pixel = 0;
-			++pixel;
+				Register: xx RR GG BB (little endian)
+
+				Blue in the bottom 8 bits
+
+				ORing the blue bits with the green bits
+
+				If either are set, it sets it, composites them together
+			*/
+			// shift these values up and OR them together
+			*pixel++ = ((green << 8) | blue);
 		}
 
 		row += pitch;
@@ -180,7 +186,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 		HWND windowHandle = CreateWindowEx(
 			0,
 			windowClass.lpszClassName,
-			"Game Time Yeah",
+			"Handmade Hero",
 			WS_OVERLAPPEDWINDOW | WS_VISIBLE,
 			CW_USEDEFAULT,
 			CW_USEDEFAULT,
@@ -198,15 +204,11 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				int xOffset = 0;
 				int yOffset = 0;
 			while (running) {
-
-
 				MSG message;
 				while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
-
 					if (message.message == WM_QUIT) {
 						running = false;
 					}
-
 					TranslateMessage(&message);
 					DispatchMessage(&message);
 				}
