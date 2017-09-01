@@ -1,5 +1,7 @@
 #include <Windows.h>
 #include <stdint.h>
+#include <Xinput.h>
+
 
 #define internal static
 #define local_persist static
@@ -238,6 +240,28 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 					TranslateMessage(&message);
 					DispatchMessage(&message);
 				}
+
+				// X-input is a polling based API, it only gives us the current state of the controller when we ask for it
+				// interrupt and polling input
+				// interrupt, whenever device needs to tell you something happened, it sends you the data
+				// old days, interrupts on the CPU
+				// polling usually, or packet networking buffering thing
+
+				for (DWORD controllerIndex = 0; controllerIndex < XUSER_MAX_COUNT; ++controllerIndex) {
+					XINPUT_STATE controllerState;
+					if (XInputGetState(controllerIndex, &controllerState) == ERROR_SUCCESS) 
+					{
+						// gotta love things like error_success
+						// controller is plugged in
+						
+					}
+					else {
+						// controller is not available
+
+					}
+
+				}
+
 				RenderWeirdGradient(globalBackbuffer, xOffset, yOffset);
 
 				HDC deviceContext = GetDC(windowHandle);
