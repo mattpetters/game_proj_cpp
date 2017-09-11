@@ -26,6 +26,36 @@ struct win32_window_dimension {
 	int height;
 };
 
+#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
+typedef X_INPUT_GET_STATE(x_input_get_state);
+X_INPUT_GET_STATE(XInputGetStateStub)
+{
+	return(0);
+}
+global_var x_input_get_state *XInputGetState_ = XInputGetStateStub;
+
+// initializing function pointers so that program doesn't crash
+
+#define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
+typedef X_INPUT_SET_STATE(x_input_set_state);
+X_INPUT_SET_STATE(XInputSetStateStub) 
+{
+	return(0);
+}
+global_var x_input_set_state *XInputSetState_ = XInputSetStateStub;
+
+#define XInputGetState XInputGetState_
+#define XInputSetState XInputSetState_
+
+internal void Win32LoadXInput(void)
+{
+	HMODULE xInputLibrary = LoadLibrary("xinput1_3.dll");
+	if (xInputLibrary) {
+		XInputGetState = (x_input_get_state *)GetProcAddress(xInputLibrary, "XInputGetState");
+		XInputSetState = (x_input_set_state *)GetProcAddress(xInputLibrary, "XInputSetState");
+	}
+}
+
 win32_window_dimension
 Win32GetWindowDimension(HWND window) 
 {
@@ -157,6 +187,52 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		running = false;
 	} break;
 
+	case WM_SYSKEYDOWN:
+	case WM_SYSKEYUP:
+	case WM_KEYDOWN:
+	case WM_KEYUP:
+	{
+		uint32 virtualKeyCode = wParam;
+		bool WasDown = ((lParam & (1 << 30)) != 0);
+		bool IsDown = ((lParam & (1 << 31)) == 0);
+		if (IsDown != WasDown) {
+			if (virtualKeyCode == 'W') {
+			}
+			else if (virtualKeyCode == 'A') {
+			}
+			else if (virtualKeyCode == 'S') {
+			}
+			else if (virtualKeyCode == 'D') {
+			}
+			else if (virtualKeyCode == 'Q') {
+			}
+			else if (virtualKeyCode == 'E') {
+			}
+			else if (virtualKeyCode == VK_UP) {
+			}
+			else if (virtualKeyCode == VK_DOWN) {
+			}
+			else if (virtualKeyCode == VK_LEFT) {
+			}
+			else if (virtualKeyCode == VK_RIGHT) {
+			}
+			else if (virtualKeyCode == VK_ESCAPE) {
+			}
+			else if (virtualKeyCode == VK_SPACE) {
+				OutputDebugStringA("Space:");
+				if (IsDown) {
+				OutputDebugStringA("IsDown\n");
+				}
+				else if (WasDown) {
+				OutputDebugStringA("WasDown\n");
+				}
+			};
+		}
+
+	} break;
+
+
+
 	case WM_CLOSE:
 	{
 		// TODO: handle this as a message to the user
@@ -186,7 +262,6 @@ LRESULT CALLBACK Win32MainWindowCallback(
 
 	default:
 	{
-		OutputDebugStringA("default\n");
 		result = DefWindowProc(window, message, wParam, lParam);
 
 	} break;
@@ -200,6 +275,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLine, int showCode)
 {
+	Win32LoadXInput();
 	WNDCLASS windowClass = {};
 	Win32ResizeDIBSection(&globalBackbuffer, 1280, 720);
 
@@ -249,17 +325,36 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 
 				for (DWORD controllerIndex = 0; controllerIndex < XUSER_MAX_COUNT; ++controllerIndex) {
 					XINPUT_STATE controllerState;
-					if (XInputGetState(controllerIndex, &controllerState) == ERROR_SUCCESS) 
-					{
+					if (XInputGetState(controllerIndex, &controllerState) == ERROR_SUCCESS) {
 						// gotta love things like error_success
 						// controller is plugged in
-						
-					}
-					else {
+						XINPUT_GAMEPAD *pad = &controllerState.Gamepad;
+
+						bool Up = (pad->wButtons & XINPUT_GAMEPAD_DPAD_UP);
+						bool Down = (pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+						bool Left = (pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+						bool Right = (pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+
+						bool Start = (pad->wButtons & XINPUT_GAMEPAD_START);
+						bool Back = (pad->wButtons & XINPUT_GAMEPAD_BACK);
+
+						bool LeftShoulder = (pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+						bool RightShoulder = (pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+
+						bool AButton = (pad->wButtons & XINPUT_GAMEPAD_A);
+						bool BButton = (pad->wButtons & XINPUT_GAMEPAD_B);
+						bool XButton = (pad->wButtons & XINPUT_GAMEPAD_X);
+						bool YButton = (pad->wButtons & XINPUT_GAMEPAD_Y);
+
+						int16 StickX = pad->sThumbLX;
+						int16 StickY = pad->sThumbLY;
+
+						if (AButton) {
+							yOffset += 2;
+						}
+					} else {
 						// controller is not available
-
 					}
-
 				}
 
 				RenderWeirdGradient(globalBackbuffer, xOffset, yOffset);
@@ -271,7 +366,6 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				ReleaseDC(windowHandle, deviceContext);
 				
 				++xOffset;
-                yOffset += 2;
 			}
 		}
 		else {
