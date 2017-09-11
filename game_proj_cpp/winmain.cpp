@@ -77,9 +77,11 @@ Win32InitDirectSound(HWND window, int32 bufferSize, int32 samplesPerSecond)
 		waveFormat.wFormatTag = WAVE_FORMAT_PCM;
 		waveFormat.nChannels = 2;
 		waveFormat.nSamplesPerSec = samplesPerSecond;
+		waveFormat.wBitsPerSample = 16;
 		waveFormat.nBlockAlign = (waveFormat.nChannels * waveFormat.wBitsPerSample) / 8;
 		waveFormat.nAvgBytesPerSec = waveFormat.nBlockAlign*waveFormat.nSamplesPerSec;
-		waveFormat.wBitsPerSample = 16;
+		waveFormat.cbSize = 0;
+
 		LPDIRECTSOUND directSound;
 		if (DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &directSound, 0))) {
 			if (SUCCEEDED(directSound->SetCooperativeLevel(window, DSSCL_PRIORITY)))
@@ -116,13 +118,7 @@ Win32InitDirectSound(HWND window, int32 bufferSize, int32 samplesPerSecond)
 
 			LPDIRECTSOUNDBUFFER secondaryBuffer;
 			if (SUCCEEDED(directSound->CreateSoundBuffer(&bufferDescription, &secondaryBuffer, 0))) {
-
-				if (SUCCEEDED(secondaryBuffer->SetFormat(&waveFormat))) {
 					OutputDebugStringA("Secondary buffer format was set \n");
-				}
-				else {
-					//TODO: logging
-				}
 			}
 			else {
 				//TODO: logging
