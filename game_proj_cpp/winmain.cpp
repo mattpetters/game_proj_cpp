@@ -1,7 +1,7 @@
 #include <Windows.h>
 #include <stdint.h>
 #include <Xinput.h>
-
+#include <dsound.h>
 
 #define internal static
 #define local_persist static
@@ -17,6 +17,7 @@ typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
+typedef int32 bool32;
 
 // TODO: global for now
 global_var bool running;
@@ -26,11 +27,16 @@ struct win32_window_dimension {
 	int height;
 };
 
+
+#define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice,  LPDIRECTSOUND *ppDS,  LPUNKNOWN pUnkOuter);
+typedef DIRECT_SOUND_CREATE(direct_sound_create);
+
+
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
 typedef X_INPUT_GET_STATE(x_input_get_state);
 X_INPUT_GET_STATE(XInputGetStateStub)
 {
-	return(0);
+	return(ERROR_DEVICE_NOT_CONNECTED);
 }
 global_var x_input_get_state *XInputGetState_ = XInputGetStateStub;
 
@@ -40,7 +46,7 @@ global_var x_input_get_state *XInputGetState_ = XInputGetStateStub;
 typedef X_INPUT_SET_STATE(x_input_set_state);
 X_INPUT_SET_STATE(XInputSetStateStub) 
 {
-	return(0);
+	return(ERROR_DEVICE_NOT_CONNECTED);
 }
 global_var x_input_set_state *XInputSetState_ = XInputSetStateStub;
 
@@ -49,11 +55,93 @@ global_var x_input_set_state *XInputSetState_ = XInputSetStateStub;
 
 internal void Win32LoadXInput(void)
 {
+	HMODULE xInputLibrary = LoadLibrary("xinput1_4.dll");
+
+	if (!xInputLibrary) {
 	HMODULE xInputLibrary = LoadLibrary("xinput1_3.dll");
+	}
 	if (xInputLibrary) {
 		XInputGetState = (x_input_get_state *)GetProcAddress(xInputLibrary, "XInputGetState");
 		XInputSetState = (x_input_set_state *)GetProcAddress(xInputLibrary, "XInputSetState");
 	}
+}
+
+internal void
+Win32InitDirectSound(HWND window, int32 bufferSize, int32 samplesPerSecond) 
+{
+	//load the library
+	HMODULE DirectSoundLibrary = LoadLibraryA("dsound.dll");
+	if (DirectSoundLibrary) {
+		direct_sound_create *DirectSoundCreate = (direct_sound_create*)GetProcAddress(DirectSoundLibrary, "DirectSoundCreate");
+		WAVEFORMATEX waveFormat = {};
+		waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+		waveFormat.nChannels = 2;
+		waveFormat.nSamplesPerSec = samplesPerSecond;
+		waveFormat.nBlockAlign = (waveFormat.nChannels * waveFormat.wBitsPerSample) / 8;
+		waveFormat.nAvgBytesPerSec = waveFormat.nBlockAlign*waveFormat.nSamplesPerSec;
+		waveFormat.wBitsPerSample = 16;
+		LPDIRECTSOUND directSound;
+		if (DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &directSound, 0))) {
+			if (SUCCEEDED(directSound->SetCooperativeLevel(window, DSSCL_PRIORITY)))
+			{
+				DSBUFFERDESC bufferDescription = { sizeof(bufferDescription) };
+				bufferDescription.dwSize = sizeof(bufferDescription);
+				bufferDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+				LPDIRECTSOUNDBUFFER primaryBuffer;
+				if (SUCCEEDED(directSound->CreateSoundBuffer(&bufferDescription, &primaryBuffer, 0))) {
+
+					if (SUCCEEDED(primaryBuffer->SetFormat(&waveFormat))) {
+						OutputDebugStringA("Primary buffer format was set \n");
+					} else {
+						//TODO: logging
+					}
+				}
+				else {
+					//TODO: logging
+				}
+
+
+			}
+			else {
+				// TODO: logging
+			}
+
+			DSBUFFERDESC bufferDescription = { sizeof(bufferDescription) };
+			bufferDescription.dwSize = sizeof(bufferDescription);
+			bufferDescription.dwFlags = 0;
+			bufferDescription.dwBufferBytes = bufferSize;
+			bufferDescription.lpwfxFormat = &waveFormat;
+
+
+			LPDIRECTSOUNDBUFFER secondaryBuffer;
+			if (SUCCEEDED(directSound->CreateSoundBuffer(&bufferDescription, &secondaryBuffer, 0))) {
+
+				if (SUCCEEDED(secondaryBuffer->SetFormat(&waveFormat))) {
+					OutputDebugStringA("Secondary buffer format was set \n");
+				}
+				else {
+					//TODO: logging
+				}
+			}
+			else {
+				//TODO: logging
+			}
+		}
+		else {
+			//todo: logging
+		}
+
+	}
+	else {
+			//todo: logging
+	}
+
+
+	//get a directsound object
+	//create a primary buffer
+	//create a secondary buffer
+	//start it playing
 }
 
 win32_window_dimension
@@ -81,13 +169,13 @@ struct win32_offscreen_buffer
 
 global_var win32_offscreen_buffer globalBackbuffer;
 
-internal void RenderWeirdGradient(win32_offscreen_buffer buffer, int xOffset, int yOffset)
+internal void RenderWeirdGradient(win32_offscreen_buffer *buffer, int xOffset, int yOffset)
 {
-	int width = buffer.Width;
-	int height = buffer.Height;
+	int width = buffer->Width;
+	int height = buffer->Height;
 	// Pitch is the amount we want to move the pointer, difference between a row and the next row
 	// pointer aliasing, when compiler doesn't know if a pointer has been rewritten
-	uint8 *row = (uint8 *)buffer.Memory;
+	uint8 *row = (uint8 *)buffer->Memory;
 	for (int y = 0; y < height; ++y) 
 	{
 		/*
@@ -122,7 +210,7 @@ internal void RenderWeirdGradient(win32_offscreen_buffer buffer, int xOffset, in
 			*pixel++ = ((green << 8) | blue);
 		}
 
-		row += buffer.Pitch;
+		row += buffer->Pitch;
 	}
 }
 
@@ -158,12 +246,12 @@ internal void Win32ResizeDIBSection(win32_offscreen_buffer *buffer, int width, i
 
 }
 
-internal void Win32DisplayBufferInWindow(HDC deviceContext, int windowWidth, int windowHeight, win32_offscreen_buffer buffer, int x, int y, int width, int height) 
+internal void Win32DisplayBufferInWindow(HDC deviceContext, int windowWidth, int windowHeight, win32_offscreen_buffer *buffer, int x, int y, int width, int height) 
 {
 	// Aspect Ratio - floating point or in integer
 	// TODO: Aspect ratio correction
 	StretchDIBits(deviceContext, 
-		0, 0, windowWidth, windowHeight, 0, 0,buffer.Width, buffer.Height, buffer.Memory, &buffer.Info, DIB_RGB_COLORS, SRCCOPY);
+		0, 0, windowWidth, windowHeight, 0, 0,buffer->Width, buffer->Height, buffer->Memory, &buffer->Info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 
@@ -228,6 +316,11 @@ LRESULT CALLBACK Win32MainWindowCallback(
 				}
 			};
 		}
+		
+		bool AltKeyWasDown = ((lParam & (1 << 29)) != 0);
+		if ((virtualKeyCode == VK_F4) && AltKeyWasDown){
+			running = false;
+		}
 
 	} break;
 
@@ -254,7 +347,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		int height = paint.rcPaint.bottom - paint.rcPaint.top;
 		int width = paint.rcPaint.right - paint.rcPaint.left;
 		win32_window_dimension dimension = Win32GetWindowDimension(window);
-		Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, globalBackbuffer, x, y, width, height);
+		Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, &globalBackbuffer, x, y, width, height);
 
 		EndPaint(window, &paint);
 
@@ -276,7 +369,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLine, int showCode)
 {
 	Win32LoadXInput();
-	WNDCLASS windowClass = {};
+	WNDCLASSA windowClass = {};
 	Win32ResizeDIBSection(&globalBackbuffer, 1280, 720);
 
 	windowClass.style = CS_HREDRAW|CS_VREDRAW;
@@ -306,6 +399,8 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 
 				int xOffset = 0;
 				int yOffset = 0;
+
+				Win32InitDirectSound(windowHandle, 48000, 48000*sizeof(int16)*2);
 			while (running) {
                 // trying to be lexically scoped as close as possible
 				MSG message;
@@ -357,12 +452,12 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 					}
 				}
 
-				RenderWeirdGradient(globalBackbuffer, xOffset, yOffset);
+				RenderWeirdGradient(&globalBackbuffer, xOffset, yOffset);
 
 				HDC deviceContext = GetDC(windowHandle);
 				win32_window_dimension dimension = Win32GetWindowDimension(windowHandle);
 
-				Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, globalBackbuffer, 0, 0, dimension.width, dimension.height);
+				Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, &globalBackbuffer, 0, 0, dimension.width, dimension.height);
 				ReleaseDC(windowHandle, deviceContext);
 				
 				++xOffset;
