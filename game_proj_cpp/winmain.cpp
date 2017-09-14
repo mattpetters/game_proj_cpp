@@ -21,6 +21,7 @@ typedef int32 bool32;
 
 // TODO: global for now
 global_var bool running;
+global_var LPDIRECTSOUNDBUFFER globalSecondaryBuffer;
 
 struct win32_window_dimension {
 	int width;
@@ -115,9 +116,9 @@ Win32InitDirectSound(HWND window, int32 bufferSize, int32 samplesPerSecond)
 			bufferDescription.dwBufferBytes = bufferSize;
 			bufferDescription.lpwfxFormat = &waveFormat;
 
-
-			LPDIRECTSOUNDBUFFER secondaryBuffer;
-			if (SUCCEEDED(directSound->CreateSoundBuffer(&bufferDescription, &secondaryBuffer, 0))) {
+			HRESULT error = directSound->CreateSoundBuffer(&bufferDescription, &globalSecondaryBuffer, 0);
+			if (SUCCEEDED(error)) 
+			{
 					OutputDebugStringA("Secondary buffer format was set \n");
 			}
 			else {
@@ -390,73 +391,133 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 			0);
 		if (windowHandle) 
 		{
+			HDC deviceContext = GetDC(windowHandle);
 			running = true;
 			// Windows sends messages to your window through a message queue
-
+			
+			int samplesPerSecond = 48000;
 				int xOffset = 0;
 				int yOffset = 0;
+				int toneHz = 256;
+				int16 toneVolume = 3000;
+				uint32 runningSampleIndex = 0;
+				int squareWaveCounter = 0;
+				// how many samples per chunk
+				int squareWavePeriod = samplesPerSecond/toneHz;
+				int halfSquareWavePd = squareWavePeriod / 2;
+				int bytesPerSample = sizeof(int16) * 2;
+				int secondaryBufferSize = samplesPerSecond*bytesPerSample;
 
-				Win32InitDirectSound(windowHandle, 48000, 48000*sizeof(int16)*2);
-			while (running) {
-                // trying to be lexically scoped as close as possible
-				MSG message;
-				while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
-					if (message.message == WM_QUIT) {
-						running = false;
-					}
-					TranslateMessage(&message);
-					DispatchMessage(&message);
-				}
-
-				// X-input is a polling based API, it only gives us the current state of the controller when we ask for it
-				// interrupt and polling input
-				// interrupt, whenever device needs to tell you something happened, it sends you the data
-				// old days, interrupts on the CPU
-				// polling usually, or packet networking buffering thing
-
-				for (DWORD controllerIndex = 0; controllerIndex < XUSER_MAX_COUNT; ++controllerIndex) {
-					XINPUT_STATE controllerState;
-					if (XInputGetState(controllerIndex, &controllerState) == ERROR_SUCCESS) {
-						// gotta love things like error_success
-						// controller is plugged in
-						XINPUT_GAMEPAD *pad = &controllerState.Gamepad;
-
-						bool Up = (pad->wButtons & XINPUT_GAMEPAD_DPAD_UP);
-						bool Down = (pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
-						bool Left = (pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
-						bool Right = (pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
-
-						bool Start = (pad->wButtons & XINPUT_GAMEPAD_START);
-						bool Back = (pad->wButtons & XINPUT_GAMEPAD_BACK);
-
-						bool LeftShoulder = (pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
-						bool RightShoulder = (pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
-
-						bool AButton = (pad->wButtons & XINPUT_GAMEPAD_A);
-						bool BButton = (pad->wButtons & XINPUT_GAMEPAD_B);
-						bool XButton = (pad->wButtons & XINPUT_GAMEPAD_X);
-						bool YButton = (pad->wButtons & XINPUT_GAMEPAD_Y);
-
-						int16 StickX = pad->sThumbLX;
-						int16 StickY = pad->sThumbLY;
-
-						if (AButton) {
-							yOffset += 2;
+				Win32InitDirectSound(windowHandle, samplesPerSecond, secondaryBufferSize);
+				globalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+				while (running) {
+					// trying to be lexically scoped as close as possible
+					MSG message;
+					while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
+						if (message.message == WM_QUIT) {
+							running = false;
 						}
-					} else {
-						// controller is not available
+						TranslateMessage(&message);
+						DispatchMessage(&message);
 					}
-				}
 
-				RenderWeirdGradient(&globalBackbuffer, xOffset, yOffset);
+					// X-input is a polling based API, it only gives us the current state of the controller when we ask for it
+					// interrupt and polling input
+					// interrupt, whenever device needs to tell you something happened, it sends you the data
+					// old days, interrupts on the CPU
+					// polling usually, or packet networking buffering thing
 
-				HDC deviceContext = GetDC(windowHandle);
+					for (DWORD controllerIndex = 0; controllerIndex < XUSER_MAX_COUNT; ++controllerIndex) {
+						XINPUT_STATE controllerState;
+						if (XInputGetState(controllerIndex, &controllerState) == ERROR_SUCCESS) {
+							// gotta love things like error_success
+							// controller is plugged in
+							XINPUT_GAMEPAD *pad = &controllerState.Gamepad;
+
+							bool Up = (pad->wButtons & XINPUT_GAMEPAD_DPAD_UP);
+							bool Down = (pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+							bool Left = (pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+							bool Right = (pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+
+							bool Start = (pad->wButtons & XINPUT_GAMEPAD_START);
+							bool Back = (pad->wButtons & XINPUT_GAMEPAD_BACK);
+
+							bool LeftShoulder = (pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+							bool RightShoulder = (pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+
+							bool AButton = (pad->wButtons & XINPUT_GAMEPAD_A);
+							bool BButton = (pad->wButtons & XINPUT_GAMEPAD_B);
+							bool XButton = (pad->wButtons & XINPUT_GAMEPAD_X);
+							bool YButton = (pad->wButtons & XINPUT_GAMEPAD_Y);
+
+							int16 StickX = pad->sThumbLX;
+							int16 StickY = pad->sThumbLY;
+
+							if (AButton) {
+								yOffset += 2;
+							}
+
+							xOffset += StickY >> 12;
+							yOffset += StickX >> 12;
+
+						}
+						else {
+							// controller is not available
+						}
+					}
+
+					RenderWeirdGradient(&globalBackbuffer, xOffset, yOffset);
+
+					//DirectSound test
+					DWORD playCursor;
+					DWORD writeCursor;
+					if (SUCCEEDED(globalSecondaryBuffer->GetCurrentPosition(&playCursor, &writeCursor))) {
+
+						DWORD byteToLock = runningSampleIndex*bytesPerSample % secondaryBufferSize;
+						DWORD bytesToWrite;
+						if (byteToLock > playCursor) {
+							bytesToWrite = (secondaryBufferSize - byteToLock);
+							bytesToWrite += playCursor;
+						}
+						else {
+							bytesToWrite = playCursor - byteToLock;
+						}
+
+						VOID *region1;
+						DWORD region1Size;
+						VOID *region2;
+						DWORD region2Size;
+
+
+						if (SUCCEEDED(globalSecondaryBuffer->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
+							// assert that region1Size is valid
+
+							int16 *sampleOut = (int16 *)region1;
+							DWORD region1SampleCount = region1Size / bytesPerSample;
+
+							for (DWORD sampleIndex = 0; sampleIndex < region1SampleCount; ++sampleIndex)
+							{
+								int16 sampleValue = ((runningSampleIndex++ / halfSquareWavePd) % 2)? toneVolume : -toneVolume;
+								*sampleOut++ = sampleValue;
+								*sampleOut++ = sampleValue;
+							}
+
+							sampleOut = (int16 *)region2;
+							DWORD region2SampleCount = region2Size / bytesPerSample;
+							for (DWORD sampleIndex = 0; sampleIndex < region2SampleCount; ++sampleIndex)
+							{
+								int16 sampleValue = ((runningSampleIndex++ / halfSquareWavePd) % 2)? toneVolume : -toneVolume;
+								*sampleOut++ = sampleValue;
+								*sampleOut++ = sampleValue;
+							}
+							globalSecondaryBuffer->Unlock(region1, region1Size, region2, region2Size);
+						}
+					}
+
+
 				win32_window_dimension dimension = Win32GetWindowDimension(windowHandle);
-
 				Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, &globalBackbuffer, 0, 0, dimension.width, dimension.height);
-				ReleaseDC(windowHandle, deviceContext);
-				
-				++xOffset;
+
 			}
 		}
 		else {
