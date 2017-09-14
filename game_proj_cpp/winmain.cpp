@@ -392,7 +392,6 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 		if (windowHandle) 
 		{
 			HDC deviceContext = GetDC(windowHandle);
-			running = true;
 			// Windows sends messages to your window through a message queue
 			
 			int samplesPerSecond = 48000;
@@ -409,7 +408,9 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				int secondaryBufferSize = samplesPerSecond*bytesPerSample;
 
 				Win32InitDirectSound(windowHandle, samplesPerSecond, secondaryBufferSize);
-				globalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+				bool32 soundIsPlaying = false;
+				
+				running = true;
 				while (running) {
 					// trying to be lexically scoped as close as possible
 					MSG message;
@@ -475,7 +476,10 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 
 						DWORD byteToLock = runningSampleIndex*bytesPerSample % secondaryBufferSize;
 						DWORD bytesToWrite;
-						if (byteToLock > playCursor) {
+						if (byteToLock == playCursor) {
+							bytesToWrite = secondaryBufferSize;
+						}
+						else if (byteToLock > playCursor) {
 							bytesToWrite = (secondaryBufferSize - byteToLock);
 							bytesToWrite += playCursor;
 						}
@@ -497,7 +501,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 
 							for (DWORD sampleIndex = 0; sampleIndex < region1SampleCount; ++sampleIndex)
 							{
-								int16 sampleValue = ((runningSampleIndex++ / halfSquareWavePd) % 2)? toneVolume : -toneVolume;
+								int16 sampleValue = ((runningSampleIndex++ / halfSquareWavePd) % 2) ? toneVolume : -toneVolume;
 								*sampleOut++ = sampleValue;
 								*sampleOut++ = sampleValue;
 							}
@@ -506,12 +510,18 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 							DWORD region2SampleCount = region2Size / bytesPerSample;
 							for (DWORD sampleIndex = 0; sampleIndex < region2SampleCount; ++sampleIndex)
 							{
-								int16 sampleValue = ((runningSampleIndex++ / halfSquareWavePd) % 2)? toneVolume : -toneVolume;
+								int16 sampleValue = ((runningSampleIndex++ / halfSquareWavePd) % 2) ? toneVolume : -toneVolume;
 								*sampleOut++ = sampleValue;
 								*sampleOut++ = sampleValue;
 							}
 							globalSecondaryBuffer->Unlock(region1, region1Size, region2, region2Size);
 						}
+					}
+
+					if (!soundIsPlaying) 
+					{
+						globalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+						soundIsPlaying = true;
 					}
 
 
