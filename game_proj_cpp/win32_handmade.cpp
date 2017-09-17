@@ -429,6 +429,10 @@ Win32FillSoundBuffer(win32_sound_output *soundOutput, DWORD byteToLock, DWORD by
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLine, int showCode)
 {
+	LARGE_INTEGER performanceCountFrequencyResult;
+	QueryPerformanceFrequency(&performanceCountFrequencyResult);
+	int64 performanceCountFrequency = performanceCountFrequencyResult.QuadPart;
+
 	Win32LoadXInput();
 	WNDCLASSA windowClass = {};
 	Win32ResizeDIBSection(&globalBackbuffer, 1280, 720);
@@ -439,6 +443,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 	windowClass.hInstance = instance;
 	// windowClass.hIcon
 	windowClass.lpszClassName = "GameWindowClass";
+
 	if (RegisterClass(&windowClass)) 
 	{
 		HWND windowHandle = CreateWindowEx(
@@ -474,10 +479,15 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				Win32FillSoundBuffer(&soundOutput, 0, soundOutput.secondaryBufferSize);
 				globalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 				
+				LARGE_INTEGER lastCounter;
+				QueryPerformanceCounter(&lastCounter);
+				int64 lastCycleCount = __rdtsc();
+
 				running = true;
 				while (running) 
 				{
-					// trying to be lexically scoped as close as possible
+
+
 					MSG message;
 					while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) 
 					{
@@ -561,12 +571,28 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 						Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite);
 					}
 
-
-
-
 				win32_window_dimension dimension = Win32GetWindowDimension(windowHandle);
 				Win32DisplayBufferInWindow(deviceContext, dimension.width, dimension.height, &globalBackbuffer, 0, 0, dimension.width, dimension.height);
 
+				int64 endCycleCount = __rdtsc();
+				LARGE_INTEGER endCounter;
+				QueryPerformanceCounter(&endCounter);
+
+				//display the value here
+				int64 cyclesElapsed = endCycleCount - lastCycleCount;
+				int64 counterElapsed = endCounter.QuadPart - lastCounter.QuadPart; //
+				// 1 / counts per frame
+				int32 milliseconds = (int32)(1000 * counterElapsed); //
+				int32 msPerFrame = (int32)((milliseconds) / performanceCountFrequency); //ms per frame
+				int32 framesPerSecond = performanceCountFrequency / counterElapsed;
+				int32 megacyclesPerFrame = (int32)(cyclesElapsed / (1000 * 1000));
+
+				char buffer[256];
+				wsprintf(buffer, "%dms/f,  %df/s,  %dmc/s \n", msPerFrame, framesPerSecond, megacyclesPerFrame);
+				OutputDebugStringA(buffer);
+				
+				lastCounter = endCounter;
+				lastCycleCount = endCycleCount;
 			}
 		}
 		else {
