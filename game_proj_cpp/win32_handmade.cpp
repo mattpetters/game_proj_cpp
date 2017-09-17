@@ -73,6 +73,11 @@ internal void Win32LoadXInput(void)
 	}
 }
 
+void *PlatformLoadFile(char *Filename)
+{
+    // win32 file loading
+}
+
 internal void
 Win32InitDirectSound(HWND window, int32 bufferSize, int32 samplesPerSecond) 
 {
