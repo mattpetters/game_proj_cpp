@@ -10,6 +10,8 @@
 
 #define Pi32 3.14159265359f
 
+#include "handmade.h"
+
 typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
@@ -28,6 +30,7 @@ typedef double real64;
 // TODO: global for now
 global_var bool running;
 global_var LPDIRECTSOUNDBUFFER globalSecondaryBuffer;
+
 
 struct win32_window_dimension {
 	int width;
@@ -73,10 +76,6 @@ internal void Win32LoadXInput(void)
 	}
 }
 
-void *PlatformLoadFile(char *Filename)
-{
-    // win32 file loading
-}
 
 internal void
 Win32InitDirectSound(HWND window, int32 bufferSize, int32 samplesPerSecond) 
@@ -547,7 +546,8 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 						}
 					}
 
-					RenderWeirdGradient(&globalBackbuffer, xOffset, yOffset);
+					GameUpdateAndRender();
+					//RenderWeirdGradient(&globalBackbuffer, xOffset, yOffset);
 
 					//DirectSound test
 					DWORD playCursor;
@@ -578,19 +578,20 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 				LARGE_INTEGER endCounter;
 				QueryPerformanceCounter(&endCounter);
 
+				// MainLoop();
 				//display the value here
 				int64 cyclesElapsed = endCycleCount - lastCycleCount;
 				int64 counterElapsed = endCounter.QuadPart - lastCounter.QuadPart; //
 				// 1 / counts per frame
 				int32 milliseconds = (int32)(1000 * counterElapsed); //
 				int32 msPerFrame = (int32)((milliseconds) / performanceCountFrequency); //ms per frame
-				int32 framesPerSecond = performanceCountFrequency / counterElapsed;
+				int32 framesPerSecond = (int32)performanceCountFrequency / (int32) counterElapsed;
 				int32 megacyclesPerFrame = (int32)(cyclesElapsed / (1000 * 1000));
-
+#if 0
 				char buffer[256];
 				wsprintf(buffer, "%dms/f,  %df/s,  %dmc/s \n", msPerFrame, framesPerSecond, megacyclesPerFrame);
 				OutputDebugStringA(buffer);
-				
+#endif
 				lastCounter = endCounter;
 				lastCycleCount = endCycleCount;
 			}
