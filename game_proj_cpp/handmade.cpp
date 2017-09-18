@@ -1,7 +1,7 @@
 #include "handmade.h"
 
 
-void RenderWeirdGradient(win32_offscreen_buffer *buffer, int xOffset, int yOffset)
+void RenderWeirdGradient(game_offscreen_buffer *buffer, int xOffset, int yOffset)
 {
 	int width = buffer->Width;
 	int height = buffer->Height;
@@ -46,7 +46,7 @@ void RenderWeirdGradient(win32_offscreen_buffer *buffer, int xOffset, int yOffse
 	}
 }
 
-void GameUpdateAndRender()
+void GameUpdateAndRender(game_offscreen_buffer *buffer, int blueOffset, int greenOffset)
 {
-
+    RenderWeirdGradient(buffer, blueOffset, greenOffset);
 }
