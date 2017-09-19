@@ -112,7 +112,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="handmade.cpp" />
-    <ClCompile Include="linux_handmade.cpp" />
     <ClCompile Include="win32_handmade.cpp" />
   </ItemGroup>
   <ItemGroup>
