@@ -473,13 +473,19 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR commandLi
 						}
 					}
 
+                    int16 Samples[(48000/30) * 2];
+
+                    game_sound_output_buffer soundBuffer = {};
+                    soundBuffer.samplesPerSecond = soundOutput.samplesPerSecond;
+                    soundBuffer.sampleCount = soundBuffer.samplesPerSecond / 30;
+                    soundBuffer.samples = Samples;
                     game_offscreen_buffer Buffer = {};
                     Buffer.Memory = globalBackbuffer.Memory;
                     Buffer.Width = globalBackbuffer.Width;
                     Buffer.Height = globalBackbuffer.Height;
                     Buffer.Pitch = globalBackbuffer.Pitch;
 
-					GameUpdateAndRender(&Buffer, xOffset, yOffset);
+					GameUpdateAndRender(&Buffer, xOffset, yOffset, &soundBuffer);
 
 					//DirectSound test
 					DWORD playCursor;

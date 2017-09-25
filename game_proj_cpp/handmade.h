@@ -31,6 +31,13 @@ typedef int32 bool32;
 typedef float real32;
 typedef double real64;
 
+struct game_sound_output_buffer {
+    int16 *samples;
+    int sampleCount;
+    int samplesPerSecond;
+
+};
+
 struct game_offscreen_buffer {
     void *Memory;
     int Width;
@@ -38,7 +45,7 @@ struct game_offscreen_buffer {
     int Pitch;
 };
 
-void GameUpdateAndRender(game_offscreen_buffer *buffer, int blueOffset, int greenOffset);
+void GameUpdateAndRender(game_offscreen_buffer *buffer, int blueOffset, int greenOffset,game_sound_output_buffer *SoundBuffer);
 
 #define HANDMADE_H
 #endif
