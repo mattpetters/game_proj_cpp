@@ -33,10 +33,6 @@ Just a partial list of stuff!!
 #include <xinput.h>
 #include <dsound.h>
 
-
-
-
-
 struct win32_offscreen_buffer {
     BITMAPINFO Info;
     void *Memory;
